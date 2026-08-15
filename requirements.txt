@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+langserve
+langchain-nvidia-ai-endpoints
+langchain-community
+faiss-cpu
+gradio
+python-dotenv
+arxiv
+pymupdf

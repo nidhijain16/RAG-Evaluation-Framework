@@ -1,0 +1,25 @@
+# Python cache and environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+ENV/
+env/
+
+# API keys and environment overrides
+.env
+.env-dev
+.env-prod
+
+# Local database indices (generated dynamically at setup)
+docstore_index/
+docstore_index.tgz
+
+# Temporary check files
+reg_check.txt
+reg_system_check.txt
+env_variables.txt
+env_check.txt
+git_check.txt
