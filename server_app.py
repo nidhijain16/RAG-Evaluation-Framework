@@ -96,7 +96,7 @@ class RAGResponse(BaseModel):
     output: str = Field(..., description="The generated answer from the LLM")
     sources: List[str] = Field(default=[], description="List of source document titles used for reference")
 
-# Combined RAG flow logic
+# Combined RAG flow logic (generator for streaming support)
 def rag_flow(state):
     start_time = time.time()
     question = state.get("input")
@@ -105,10 +105,11 @@ def rag_flow(state):
     # Check if docstore is loaded
     if not docstore_loaded:
         print("[RAG Route Log] Query received but docstore_index is not loaded.")
-        return {
+        yield {
             "output": "The document database index is not loaded. Please initialize the FAISS database first.",
             "sources": []
         }
+        return
         
     # Retrieve documents dynamically based on k
     docs = docstore.similarity_search(question, k=k)
@@ -117,10 +118,11 @@ def rag_flow(state):
     if not docs:
         latency = time.time() - start_time
         print(f"[RAG Route Log] Input: '{question}' | Docs Retrieved: 0 | Latency: {latency:.3f}s (Fallback triggered)")
-        return {
+        yield {
             "output": "I couldn’t find relevant documents in the corpus for this question.",
             "sources": []
         }
+        return
         
     # Reorder documents to fight 'lost in the middle' effect
     reordering = LongContextReorder()
@@ -129,12 +131,6 @@ def rag_flow(state):
     # Convert documents to a combined context string
     context_str = docs2str(reordered_docs)
     
-    # Run generator chain
-    answer = generator.invoke({
-        "context": context_str,
-        "input": question
-    })
-    
     # Extract source titles
     sources = []
     for doc in docs:
@@ -142,13 +138,25 @@ def rag_flow(state):
         sources.append(title)
     unique_sources = list(dict.fromkeys(sources))
     
-    latency = time.time() - start_time
-    print(f"[RAG Route Log] Input: '{question}' | Docs Retrieved: {len(docs)} | Latency: {latency:.3f}s")
-    
-    return {
-        "output": answer,
+    # Yield sources first, with empty output
+    yield {
+        "output": "",
         "sources": unique_sources
     }
+    
+    # Stream the response tokens from the generator
+    for chunk in generator.stream({
+        "context": context_str,
+        "input": question
+    }):
+        yield {
+            "output": chunk,
+            "sources": []
+        }
+        
+    latency = time.time() - start_time
+    print(f"[RAG Route Log] Input: '{question}' | Docs Retrieved: {len(docs)} | Latency: {latency:.3f}s (Streaming completed)")
+
 
 # Wire the combined RAG chain with explicit types
 rag_chain = RunnableLambda(rag_flow).with_types(input_type=RAGQuery, output_type=RAGResponse)

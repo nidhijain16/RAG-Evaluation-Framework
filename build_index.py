@@ -1,6 +1,12 @@
 import os
 import tarfile
+import ssl
+import arxiv
+ssl._create_default_https_context = ssl._create_unverified_context
+arxiv.arxiv.Client.query_url_format = 'https://export.arxiv.org/api/query?{}'
+
 from langchain_community.document_loaders import ArxivLoader
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
 from langchain_community.vectorstores import FAISS

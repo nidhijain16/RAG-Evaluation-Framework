@@ -1,10 +1,12 @@
 fastapi
 uvicorn
 langserve
+sse-starlette
+
 langchain-nvidia-ai-endpoints
 langchain-community
 faiss-cpu
 gradio
 python-dotenv
-arxiv
+arxiv==1.4.8
 pymupdf
