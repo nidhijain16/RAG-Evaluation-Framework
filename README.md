@@ -97,7 +97,10 @@ uv run python ui_client.py
 ```
 Open your browser and navigate to the local host address: [http://localhost:8090](http://localhost:8090).
 
+<<<<<<< HEAD
 
 
 
 
+=======
+>>>>>>> d218f1a (Initial commit: Gradio UI)
