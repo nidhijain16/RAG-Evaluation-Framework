@@ -1,0 +1,3 @@
+[submodule "latency_suite"]
+	path = latency_suite
+	url = https://github.com/nidhijain16/AgentEval-Latency-Suite
