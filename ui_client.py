@@ -158,6 +158,23 @@ def apply_api_key(key):
     except Exception as e:
         return f"❌ Connection Error: {e}"
 
+def fetch_latency():
+    """Fetch latency benchmark summary from backend and format as markdown."""
+    try:
+        resp = requests.get(f"{BACKEND_URL}/latency", timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            summary = data.get("summary", {})
+            md = "## Latency Benchmark Summary\n"
+            for k, v in summary.items():
+                pretty_key = k.replace("_", " ").title()
+                md += f"- **{pretty_key}**: {v}\n"
+            return md
+        else:
+            return f"Error: Received status {resp.status_code}"
+    except Exception as e:
+        return f"Connection error: {e}"
+
 def ask_question(message, history, k_val, corpus_val, key_override):
     # If the user supplied a key override, apply it first
     if key_override and key_override.strip().startswith("nvapi-"):
@@ -263,18 +280,19 @@ def init_ui():
                     )
                     submit_btn = gr.Button("Send", variant="primary", scale=1)
                 
+                # Performance Tab (Accordion)
+                with gr.Accordion("📈 Performance", open=False):
+                    refresh_latency_btn = gr.Button("Refresh Latency", size="sm", variant="primary")
+                    latency_md = gr.Markdown(value="*Press Refresh to load latency data*")
+                    refresh_latency_btn.click(fn=fetch_latency, inputs=None, outputs=latency_md)
+
                 # Quick Suggestions Box
                 gr.Markdown("💡 **Try asking:**")
                 with gr.Row():
                     s1 = gr.Button("How does MRKL architecture combine LLMs with external tools?", variant="secondary", size="sm", elem_classes="suggest-btn")
                     s2 = gr.Button("What are the key concepts of the RAG framework?", variant="secondary", size="sm", elem_classes="suggest-btn")
                     s3 = gr.Button("Explain GraphRAG concept and its benefits.", variant="secondary", size="sm", elem_classes="suggest-btn")
-                    
-        # Event bindings
-        refresh_btn.click(fn=lambda: check_backend_status()[0], inputs=None, outputs=status_display)
-        apply_btn.click(fn=apply_api_key, inputs=api_key_box, outputs=key_status)
-        
-        # Submit action (send button click & enter press)
+
         submit_event = submit_btn.click(
             fn=ask_question,
             inputs=[txt, chatbot, k_slider, corpus_select, api_key_box],
@@ -307,4 +325,4 @@ def init_ui():
 
 if __name__ == "__main__":
     demo = init_ui()
-    demo.launch(server_name="0.0.0.0", server_port=8090, share=False, css=custom_css, theme=theme)
+    demo.launch(server_name="127.0.0.1", server_port=8090, share=False, css=custom_css, theme=theme)

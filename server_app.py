@@ -1,10 +1,12 @@
 # https://python.langchain.com/docs/langserve#server
 from fastapi import FastAPI
+from latency_helper import run_latency_benchmark, load_cached_results
 from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings
 from langserve import add_routes
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import FAISS
+# pyrefly: ignore [missing-import]
 from langchain_core.runnables import RunnableLambda
 from langchain_community.document_transformers import LongContextReorder
 from pydantic import BaseModel, Field
@@ -96,69 +98,65 @@ class RAGResponse(BaseModel):
     output: str = Field(..., description="The generated answer from the LLM")
     sources: List[str] = Field(default=[], description="List of source document titles used for reference")
 
-# Combined RAG flow logic (generator for streaming support)
-def rag_flow(state):
+# Combined RAG flow — standard invoke-compatible function.
+# Returns a complete RAGResponse dict so both /rag/invoke and /rag/stream
+# work correctly with LangServe 0.3.x.
+# NOTE: generator-based (yield) functions are NOT compatible with LangServe
+# streaming of dict outputs — they cause Internal Server Error on /stream.
+def rag_flow(state: dict) -> dict:
     start_time = time.time()
-    question = state.get("input")
-    k = state.get("k", 4)
-    
+    # Accept both Pydantic model input and plain dict (LangServe sends dict)
+    if hasattr(state, 'input'):
+        question = state.input
+        k = state.k
+    else:
+        question = state.get("input")
+        k = state.get("k", 4)
+
     # Check if docstore is loaded
     if not docstore_loaded:
         print("[RAG Route Log] Query received but docstore_index is not loaded.")
-        yield {
-            "output": "The document database index is not loaded. Please initialize the FAISS database first.",
+        return {
+            "output": "The document database index is not loaded. Please run build_index.py first.",
             "sources": []
         }
-        return
-        
+
     # Retrieve documents dynamically based on k
     docs = docstore.similarity_search(question, k=k)
-    
-    # If retriever returns an empty list, apply fallback guardrail
+
+    # Fallback guardrail — no relevant docs found
     if not docs:
         latency = time.time() - start_time
-        print(f"[RAG Route Log] Input: '{question}' | Docs Retrieved: 0 | Latency: {latency:.3f}s (Fallback triggered)")
-        yield {
-            "output": "I couldn’t find relevant documents in the corpus for this question.",
+        print(f"[RAG Route Log] Input: '{question}' | Docs Retrieved: 0 | Latency: {latency:.3f}s (Fallback)")
+        return {
+            "output": "I couldn't find relevant documents in the corpus for this question.",
             "sources": []
         }
-        return
-        
-    # Reorder documents to fight 'lost in the middle' effect
+
+    # Reorder to fight 'lost in the middle' effect
     reordering = LongContextReorder()
     reordered_docs = reordering.transform_documents(docs)
-    
-    # Convert documents to a combined context string
+
+    # Build context string
     context_str = docs2str(reordered_docs)
-    
-    # Extract source titles
+
+    # Extract unique source titles
     sources = []
     for doc in docs:
         title = doc.metadata.get("Title", doc.metadata.get("title", "Unknown Source"))
         sources.append(title)
     unique_sources = list(dict.fromkeys(sources))
-    
-    # Yield sources first, with empty output
-    yield {
-        "output": "",
-        "sources": unique_sources
-    }
-    
-    # Stream the response tokens from the generator
-    for chunk in generator.stream({
-        "context": context_str,
-        "input": question
-    }):
-        yield {
-            "output": chunk,
-            "sources": []
-        }
-        
+
+    # Invoke the generator chain — returns complete answer string
+    answer = generator.invoke({"context": context_str, "input": question})
+
     latency = time.time() - start_time
-    print(f"[RAG Route Log] Input: '{question}' | Docs Retrieved: {len(docs)} | Latency: {latency:.3f}s (Streaming completed)")
+    print(f"[RAG Route Log] Input: '{question}' | Docs Retrieved: {len(docs)} | Latency: {latency:.3f}s")
+
+    return {"output": answer, "sources": unique_sources}
 
 
-# Wire the combined RAG chain with explicit types
+# Wire the RAG chain with explicit types for Swagger/OpenAPI docs
 rag_chain = RunnableLambda(rag_flow).with_types(input_type=RAGQuery, output_type=RAGResponse)
 
 add_routes(
@@ -180,12 +178,22 @@ async def health():
             docstore_loaded = True
         except Exception as e:
             print(f"Error loading FAISS index on health check: {e}")
-            
     return {
         "status": "ok",
         "docstore_loaded": docstore_loaded,
         "nvidia_key_configured": bool(os.environ.get("NVIDIA_API_KEY"))
     }
+
+@app.get("/latency")
+async def latency():
+    """Return cached benchmark results if available."""
+    try:
+        data = load_cached_results()
+        return data
+    except FileNotFoundError:
+        return {"error": "No cached latency results. Run benchmark first."}
+    except Exception as e:
+        return {"error": str(e)}
 
 class KeyInput(BaseModel):
     key: str = Field(..., description="The NVIDIA API Key starting with nvapi-")
@@ -208,4 +216,4 @@ async def set_key(payload: KeyInput):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=9012)
+    uvicorn.run(app, host="127.0.0.1", port=9012)

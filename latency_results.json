@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-08-15T23:54:49.269855Z",
+  "data": {
+    "per_user": [
+      {
+        "user": 0,
+        "ttft_ms": 3208.85,
+        "total_ms": 3659.66,
+        "tps": 239.57,
+        "status": "success"
+      },
+      {
+        "user": 1,
+        "ttft_ms": 4777.81,
+        "total_ms": 11951.57,
+        "tps": 34.29,
+        "status": "success"
+      },
+      {
+        "user": 2,
+        "ttft_ms": 1293.18,
+        "total_ms": 9261.48,
+        "tps": 29.74,
+        "status": "success"
+      },
+      {
+        "user": 3,
+        "ttft_ms": 2454.51,
+        "total_ms": 4433.4,
+        "tps": 127.34,
+        "status": "success"
+      },
+      {
+        "user": 4,
+        "ttft_ms": 620.81,
+        "total_ms": 5276.26,
+        "tps": 54.99,
+        "status": "success"
+      }
+    ],
+    "summary": {
+      "mean_ttft_ms": 2471.03,
+      "mean_tps": 97.19,
+      "p50_ttft_ms": 2454.51,
+      "p95_ttft_ms": 4464.02,
+      "p99_ttft_ms": 4715.06
+    }
+  }
+}
